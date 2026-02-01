@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Admin Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- CSS VARIABLES & RESET --- */
+        :root { --bg: #0f172a; --panel: #1e293b; --primary: #3b82f6; --secondary: #8b5cf6; --text: #f8fafc; --gray: #94a3b8; --success: #10b981; --danger: #ef4444; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+        
+        /* --- SIDEBAR --- */
+        .sidebar { width: 260px; background: var(--panel); height: 100%; padding: 2rem; border-right: 1px solid #334155; display: flex; flex-direction: column; transition: 0.3s; z-index: 100; }
+        .logo { font-size: 1.5rem; color: var(--primary); font-weight: bold; margin-bottom: 2.5rem; display: flex; align-items: center; gap: 10px; text-decoration: none; }
+        
+        .menu { flex: 1; }
+        .menu-item { display: flex; align-items: center; padding: 1rem; color: var(--gray); text-decoration: none; border-radius: 8px; margin-bottom: 0.5rem; transition: 0.3s; cursor: pointer; }
+        .menu-item:hover, .menu-item.active { background: rgba(59, 130, 246, 0.1); color: var(--primary); }
+        .menu-item i { width: 25px; font-size: 1.1rem; }
+        
+        .user-mini { margin-top: auto; padding-top: 1rem; border-top: 1px solid #334155; display: flex; align-items: center; gap: 10px; }
+        .user-mini img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid var(--secondary); }
+        .user-info { font-size: 0.9rem; }
+        .user-info span { display: block; color: var(--gray); font-size: 0.8rem; }
+
+        /* --- MAIN CONTENT --- */
+        .main { flex: 1; padding: 2rem; overflow-y: auto; position: relative; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem; }
+        .toggle-btn { display: none; background: none; border: none; color: white; font-size: 1.5rem; cursor: pointer; }
+
+        /* SECTIONS */
+        .section { display: none; animation: fadeIn 0.4s ease; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* STATS CARDS */
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card { background: var(--panel); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .card h3 { margin: 0 0 0.5rem 0; font-size: 0.9rem; color: var(--gray); font-weight: 500; }
+        .card .num { font-size: 2.2rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .card .trend { font-size: 0.85rem; display: flex; align-items: center; gap: 5px; }
+        .trend.up { color: var(--success); } .trend.down { color: var(--danger); }
+
+        /* TABLES */
+        .table-container { background: var(--panel); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th { text-align: left; padding: 1rem; color: var(--gray); border-bottom: 1px solid #334155; font-weight: 600; }
+        td { padding: 1rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .status { padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+        .status.completed { background: rgba(16, 185, 129, 0.2); color: var(--success); }
+        .status.pending { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        
+        /* Action Buttons */
+        .btn-delete { background: rgba(239, 68, 68, 0.2); color: var(--danger); border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; transition: 0.2s; }
+        .btn-delete:hover { background: var(--danger); color: white; }
+
+        .btn-add { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 1rem; }
+        .btn-add:hover { opacity: 0.9; }
+
+        /* CHARTS */
+        .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem; margin-top: 2rem; }
+        .chart-box { background: var(--panel); padding: 1.5rem; border-radius: 12px; border: 1px solid #334155; height: 350px; }
+
+        /* MODAL (Popup) */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000; }
+        .modal.open { display: flex; }
+        .modal-content { background: var(--panel); padding: 2rem; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid #334155; }
+        .modal-content h3 { margin-top: 0; }
+        .form-group { margin-bottom: 1rem; }
+        .form-group label { display: block; margin-bottom: 0.5rem; color: var(--gray); font-size: 0.9rem; }
+        .form-group input { width: 100%; padding: 0.8rem; background: #0f172a; border: 1px solid #334155; color: white; border-radius: 6px; }
+        .form-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; }
+        .btn-cancel { background: transparent; border: 1px solid #334155; color: var(--gray); padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; }
+
+        /* MOBILE */
+        @media (max-width: 768px) {
+            .sidebar { position: fixed; left: -260px; height: 100vh; box-shadow: 10px 0 20px rgba(0,0,0,0.5); }
+            .sidebar.open { left: 0; }
+            .toggle-btn { display: block; }
+            .charts-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+    <nav class="sidebar" id="sidebar">
+        <a href="#" class="logo">
+            <i class="fas fa-cube"></i> <span>AdminPanel</span>
+        </a>
+        <div class="menu">
+            <div class="menu-item active" onclick="showSection('overview', this)">
+                <i class="fas fa-home"></i> <span>Overview</span>
+            </div>
+            <div class="menu-item" onclick="showSection('analytics', this)">
+                <i class="fas fa-chart-pie"></i> <span>Analytics</span>
+            </div>
+            <div class="menu-item" onclick="showSection('customers', this)">
+                <i class="fas fa-users"></i> <span>Customers</span>
+            </div>
+        </div>
+        <div class="user-mini">
+            <img src="profile.jpg" alt="Admin">
+            <div class="user-info">
+                <strong>Admin User</strong>
+                <span>Super Admin</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main">
+        <header class="header">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <button class="toggle-btn" onclick="toggleSidebar()"><i class="fas fa-bars"></i></button>
+                <h2>Dashboard</h2>
+            </div>
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <span id="live-time" style="color: var(--gray); font-size: 0.9rem;"></span>
+                <button style="background:none; border:none; color:white; font-size:1.2rem; cursor:pointer;"><i class="fas fa-bell"></i></button>
+            </div>
+        </header>
+
+        <div id="overview" class="section active">
+            <div class="stats">
+                <div class="card">
+                    <h3>Total Revenue</h3>
+                    <div class="num" id="total-revenue">$45,231</div>
+                    <div class="trend up"><i class="fas fa-arrow-up"></i> +20.1%</div>
+                </div>
+                <div class="card">
+                    <h3>Active Orders</h3>
+                    <div class="num">126</div>
+                    <div class="trend up"><i class="fas fa-arrow-up"></i> +5%</div>
+                </div>
+                <div class="card">
+                    <h3>Bounce Rate</h3>
+                    <div class="num">42.3%</div>
+                    <div class="trend down"><i class="fas fa-arrow-down"></i> -2.4%</div>
+                </div>
+            </div>
+
+            <h3 style="margin-bottom: 1rem;">Recent Transactions (Live Data)</h3>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr><th>Order ID</th><th>Customer</th><th>Product</th><th>Amount</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="orders-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div id="analytics" class="section">
+            <div class="charts-grid">
+                <div class="chart-box">
+                    <h3>Live Revenue Stream</h3>
+                    <canvas id="revenueChart"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h3>User Devices</h3>
+                    <canvas id="deviceChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div id="customers" class="section">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin-bottom: 1rem;">Customer List</h3>
+                <button class="btn-add" onclick="openModal()"><i class="fas fa-plus"></i> Add Customer</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th>Email</th><th>Joined</th><th>Spent</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="customers-table-body">
+                        </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div class="modal" id="customerModal">
+        <div class="modal-content">
+            <h3>Add New Customer</h3>
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" id="new-name" placeholder="Ex: John Wick">
+            </div>
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="new-email" placeholder="Ex: john@email.com">
+            </div>
+            <div class="form-actions">
+                <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+                <button class="btn-add" onclick="saveCustomer()" style="margin:0;">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. DATA STATE (The "Backend" Simulation) ---
+        let orders = [
+            { id: '#ORD-7752', user: 'John Doe', product: 'Mech Keyboard', amt: '$129.50', status: 'Completed' },
+            { id: '#ORD-7753', user: 'Jane Smith', product: '4K Monitor', amt: '$299.99', status: 'Pending' },
+            { id: '#ORD-7754', user: 'Mike Brown', product: 'Gaming Mouse', amt: '$45.00', status: 'Completed' },
+        ];
+
+        let customers = [
+            { name: 'John Doe', email: 'john@example.com', joined: 'Jan 12, 2026', spent: '$1,200' },
+            { name: 'Jane Smith', email: 'jane@test.com', joined: 'Feb 01, 2026', spent: '$450' },
+            { name: 'Alice Johnson', email: 'alice@domain.com', joined: 'Feb 15, 2026', spent: '$2,340' }
+        ];
+
+        // --- 2. RENDER FUNCTIONS (Updates HTML from Data) ---
+        function renderOrders() {
+            const tbody = document.getElementById('orders-table-body');
+            tbody.innerHTML = orders.map(order => `
+                <tr>
+                    <td>${order.id}</td>
+                    <td>${order.user}</td>
+                    <td>${order.product}</td>
+                    <td>${order.amt}</td>
+                    <td><span class="status ${order.status.toLowerCase()}">${order.status}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderCustomers() {
+            const tbody = document.getElementById('customers-table-body');
+            tbody.innerHTML = customers.map((c, index) => `
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.email}</td>
+                    <td>${c.joined}</td>
+                    <td>${c.spent}</td>
+                    <td><button class="btn-delete" onclick="deleteCustomer(${index})"><i class="fas fa-trash"></i></button></td>
+                </tr>
+            `).join('');
+        }
+
+        // --- 3. DYNAMIC ACTIONS ---
+        
+        // Add Customer
+        function openModal() { document.getElementById('customerModal').classList.add('open'); }
+        function closeModal() { document.getElementById('customerModal').classList.remove('open'); }
+        
+        function saveCustomer() {
+            const name = document.getElementById('new-name').value;
+            const email = document.getElementById('new-email').value;
+            
+            if(name && email) {
+                const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                customers.push({ name, email, joined: today, spent: '$0.00' });
+                renderCustomers();
+                closeModal();
+                document.getElementById('new-name').value = '';
+                document.getElementById('new-email').value = '';
+                alert("New Customer Added Successfully!");
+            } else {
+                alert("Please fill in all fields.");
+            }
+        }
+
+        // Delete Customer
+        function deleteCustomer(index) {
+            if(confirm('Are you sure you want to remove this customer?')) {
+                customers.splice(index, 1);
+                renderCustomers();
+            }
+        }
+
+        // Initialize Tables
+        renderOrders();
+        renderCustomers();
+
+        // --- 4. NAVIGATION LOGIC ---
+        function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+        function showSection(id, el) {
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+            el.classList.add('active');
+            if(window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
+        }
+
+        // --- 5. CHARTS & LIVE UPDATES ---
+        
+        // Live Clock
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('live-time').innerText = now.toLocaleTimeString();
+        }, 1000);
+
+        // Chart 1: Revenue (Updates Live)
+        const ctxRev = document.getElementById('revenueChart').getContext('2d');
+        const revChart = new Chart(ctxRev, {
+            type: 'line',
+            data: {
+                labels: ['10:00', '10:05', '10:10', '10:15', '10:20', '10:25'],
+                datasets: [{
+                    label: 'Revenue',
+                    data: [120, 190, 30, 50, 20, 300],
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: { 
+                    y: { grid: { color: '#334155' }, ticks: { color: '#94a3b8' } },
+                    x: { display: false }
+                },
+                plugins: { legend: { display: false } },
+                animation: { duration: 1000 }
+            }
+        });
+
+        // Simulate Live Data (Update Chart every 3 seconds)
+        setInterval(() => {
+            const data = revChart.data.datasets[0].data;
+            const labels = revChart.data.labels;
+            
+            // Remove first point, add new random point
+            data.shift();
+            labels.shift();
+            
+            const randomVal = Math.floor(Math.random() * 500);
+            const now = new Date();
+            
+            data.push(randomVal);
+            labels.push(now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds());
+            
+            revChart.update();
+            
+            // Randomly update Total Revenue Text
+            const currentTotal = parseInt(document.getElementById('total-revenue').innerText.replace('$','').replace(',',''));
+            document.getElementById('total-revenue').innerText = '$' + (currentTotal + Math.floor(Math.random() * 100)).toLocaleString();
+            
+        }, 3000);
+
+        // Chart 2: Device (Static)
+        new Chart(document.getElementById('deviceChart').getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: ['Desktop', 'Mobile', 'Tablet'],
+                datasets: [{
+                    data: [55, 30, 15],
+                    backgroundColor: ['#3b82f6', '#8b5cf6', '#10b981'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8' } } }
+            }
+        });
+
+    </script>
+</body>
+</html>
